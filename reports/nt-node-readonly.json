@@ -1,0 +1,15 @@
+{
+  "node": "NT_2.0.0rc7",
+  "counts": {
+    "account_state_registered": 1,
+    "historical_bars": 721,
+    "source_metadata": 6,
+    "quotes": 4,
+    "trades": 2,
+    "completed_bars": 6,
+    "l2_snapshots": 3
+  },
+  "orders": "NOT_RUN",
+  "unlock": "NOT_RUN",
+  "continuous_market_session": "UNVERIFIED"
+}

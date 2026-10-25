@@ -1,0 +1,185 @@
+{
+  "started_ns": 1792929938225539000,
+  "python": "3.14.8",
+  "nautilus_trader": "2.0.0rc7",
+  "futu-api": "10.11.7108",
+  "order_operations": "NOT_RUN",
+  "unlock": "NOT_RUN",
+  "checks": [
+    {
+      "name": "OpenD handshake",
+      "status": "PASS"
+    },
+    {
+      "name": "contract:00700.HK",
+      "status": "PASS",
+      "instrument_id": "00700.HK.FUTU",
+      "raw_symbol": "HK.00700",
+      "lot_size": "100",
+      "currency": "HKD",
+      "stock_type": "STOCK"
+    },
+    {
+      "name": "history:00700.HK:K_1M",
+      "status": "PASS",
+      "count": 331,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "history:00700.HK:K_DAY",
+      "status": "PASS",
+      "count": 1,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "subscribe:00700.HK",
+      "status": "PASS",
+      "acknowledged": true
+    },
+    {
+      "name": "get_order_book:00700.HK",
+      "status": "PASS",
+      "records": 1
+    },
+    {
+      "name": "get_rt_ticker:00700.HK",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "get_cur_kline:00700.HK",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "contract:02800.HK",
+      "status": "PASS",
+      "instrument_id": "02800.HK.FUTU",
+      "raw_symbol": "HK.02800",
+      "lot_size": "500",
+      "currency": "HKD",
+      "stock_type": "ETF"
+    },
+    {
+      "name": "history:02800.HK:K_1M",
+      "status": "PASS",
+      "count": 331,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "history:02800.HK:K_DAY",
+      "status": "PASS",
+      "count": 1,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "subscribe:02800.HK",
+      "status": "PASS",
+      "acknowledged": true
+    },
+    {
+      "name": "get_order_book:02800.HK",
+      "status": "PASS",
+      "records": 1
+    },
+    {
+      "name": "get_rt_ticker:02800.HK",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "get_cur_kline:02800.HK",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "contract:AAPL.US",
+      "status": "PASS",
+      "instrument_id": "AAPL.US.FUTU",
+      "raw_symbol": "US.AAPL",
+      "lot_size": "1",
+      "currency": "USD",
+      "stock_type": "STOCK"
+    },
+    {
+      "name": "history:AAPL.US:K_1M",
+      "status": "PASS",
+      "count": 390,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "history:AAPL.US:K_DAY",
+      "status": "PASS",
+      "count": 1,
+      "adjustment": "NoAdjust",
+      "session": "RTH",
+      "event_before_receipt": true
+    },
+    {
+      "name": "subscribe:AAPL.US",
+      "status": "PASS",
+      "acknowledged": true
+    },
+    {
+      "name": "get_order_book:AAPL.US",
+      "status": "PASS",
+      "records": 1
+    },
+    {
+      "name": "get_rt_ticker:AAPL.US",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "get_cur_kline:AAPL.US",
+      "status": "PASS",
+      "records": 3
+    },
+    {
+      "name": "simulator-2:accinfo_query",
+      "status": "PASS",
+      "records": 1
+    },
+    {
+      "name": "simulator-2:position_list_query",
+      "status": "PASS",
+      "records": 0
+    },
+    {
+      "name": "simulator-2:order_list_query",
+      "status": "PASS",
+      "records": 0
+    },
+    {
+      "name": "simulator-2:deal_list_query",
+      "status": "UNVERIFIED",
+      "error_type": "ProviderError",
+      "operation": "deal_list_query"
+    },
+    {
+      "name": "account_discovery",
+      "status": "PASS",
+      "count": 5,
+      "environments": [
+        "REAL",
+        "SIMULATE"
+      ]
+    }
+  ],
+  "pushes": {
+    "book": 5,
+    "trades": 3
+  },
+  "continuous_market_session": "UNVERIFIED: closed-market observations do not validate continuous ticks, closing bars, or live reconnects",
+  "finished_ns": 1792929943895988000
+}

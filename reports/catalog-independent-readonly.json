@@ -1,0 +1,11 @@
+{
+  "reader": "nautilus_trader.persistence.ParquetDataCatalog",
+  "connector_imported": false,
+  "bars": 6,
+  "instrument_ids": [
+    "00700.HK.FUTU",
+    "AAPL.US.FUTU"
+  ],
+  "source": "actual_readonly_OpenD_node",
+  "custom_tick_registry_required": false
+}

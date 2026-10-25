@@ -1,0 +1,31 @@
+{
+  "artifact": "nautilus_futu-0.1.0-py3-none-any.whl",
+  "sha256": "7de7a055f04e9156f2d736c91a2ba70672636a04209fd1940cdc61d3f961c7f0",
+  "build": "PASS",
+  "sdist_build": "PASS",
+  "installations": [
+    {
+      "python": "3.13.17",
+      "package": "0.1.0",
+      "nautilus_trader": "2.0.0rc7",
+      "futu_api": "10.11.7108",
+      "editable": false,
+      "isolated_import": true,
+      "factory_node_build": "PASS",
+      "pip_check": "PASS",
+      "connections_opened": false
+    },
+    {
+      "python": "3.14.8",
+      "package": "0.1.0",
+      "nautilus_trader": "2.0.0rc7",
+      "futu_api": "10.11.7108",
+      "editable": false,
+      "isolated_import": true,
+      "factory_node_build": "PASS",
+      "pip_check": "PASS",
+      "connections_opened": false
+    }
+  ],
+  "order_operations": "NOT_RUN"
+}
