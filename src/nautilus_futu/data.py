@@ -55,6 +55,26 @@ _BAR_POLICIES: dict[str, tuple[str, str]] = {}
 _POLICY_LOCK = threading.Lock()
 
 
+def _command_values(command: Any, plural: str, singular: str) -> tuple[Any, ...]:
+    """Return rc8 batch fields while retaining compatibility with rc7 test doubles."""
+    values = getattr(command, plural, None)
+    if values is not None:
+        return tuple(values)
+    value = getattr(command, singular, None)
+    return (value,) if value is not None else ()
+
+
+class _RequestView:
+    """Expose one member of an rc8 batch request to the existing single-item path."""
+
+    def __init__(self, request: Any, **values: Any) -> None:
+        self._request = request
+        self.__dict__.update(values)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._request, name)
+
+
 class FutuDataClient(ManagedConnection, DataClient):
     instrument_provider: Any
 
@@ -215,9 +235,10 @@ class FutuDataClient(ManagedConnection, DataClient):
             _BAR_POLICIES[str(bar_type)] = policy
 
     async def _subscribe_quotes(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._quotes.add(symbol)
-        await self._lease(symbol, "ORDER_BOOK", "quotes")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._quotes.add(symbol)
+            await self._lease(symbol, "ORDER_BOOK", "quotes")
 
     async def _subscribe(self, command: Any) -> None:
         if command.data_type != FUTU_SOURCE:
@@ -252,19 +273,22 @@ class FutuDataClient(ManagedConnection, DataClient):
         )
 
     async def _unsubscribe_quotes(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._quotes.discard(symbol)
-        await self._release(symbol, "ORDER_BOOK", "quotes")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._quotes.discard(symbol)
+            await self._release(symbol, "ORDER_BOOK", "quotes")
 
     async def _subscribe_trades(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._trades.add(symbol)
-        await self._lease(symbol, "TICKER", "trades")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._trades.add(symbol)
+            await self._lease(symbol, "TICKER", "trades")
 
     async def _unsubscribe_trades(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._trades.discard(symbol)
-        await self._release(symbol, "TICKER", "trades")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._trades.discard(symbol)
+            await self._release(symbol, "TICKER", "trades")
 
     def _check_book_type(self, command: Any) -> None:
         if getattr(command, "book_type", BookType.L2_MBP) != BookType.L2_MBP:
@@ -274,49 +298,58 @@ class FutuDataClient(ManagedConnection, DataClient):
 
     async def _subscribe_book_depth(self, command: Any) -> None:
         self._check_book_type(command)
-        symbol = from_instrument_id(command.instrument_id)
-        self._depths[symbol] = getattr(command, "depth", 10) or 10
-        await self._lease(symbol, "ORDER_BOOK", "depth")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._depths[symbol] = getattr(command, "depth", 10) or 10
+            await self._lease(symbol, "ORDER_BOOK", "depth")
 
     async def _unsubscribe_book_depth(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._depths.pop(symbol, None)
-        await self._release(symbol, "ORDER_BOOK", "depth")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._depths.pop(symbol, None)
+            await self._release(symbol, "ORDER_BOOK", "depth")
 
     async def _subscribe_book_deltas(self, command: Any) -> None:
         self._check_book_type(command)
-        symbol = from_instrument_id(command.instrument_id)
-        self._deltas.add(symbol)
-        await self._lease(symbol, "ORDER_BOOK", "deltas")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._deltas.add(symbol)
+            await self._lease(symbol, "ORDER_BOOK", "deltas")
 
     async def _unsubscribe_book_deltas(self, command: Any) -> None:
-        symbol = from_instrument_id(command.instrument_id)
-        self._deltas.discard(symbol)
-        await self._release(symbol, "ORDER_BOOK", "deltas")
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            symbol = from_instrument_id(instrument_id_value)
+            self._deltas.discard(symbol)
+            await self._release(symbol, "ORDER_BOOK", "deltas")
 
     async def _subscribe_bars(self, command: Any) -> None:
-        self._claim_bar(command.bar_type)
-        key = str(command.bar_type)
-        self._bars[key] = command.bar_type
-        await self._lease(
-            from_instrument_id(command.bar_type.instrument_id), bar_period(command.bar_type), key
-        )
-        await self._refresh_bars(command.bar_type)
+        for bar_type in _command_values(command, "bar_types", "bar_type"):
+            self._claim_bar(bar_type)
+            key = str(bar_type)
+            self._bars[key] = bar_type
+            await self._lease(from_instrument_id(bar_type.instrument_id), bar_period(bar_type), key)
+            await self._refresh_bars(bar_type)
 
     async def _unsubscribe_bars(self, command: Any) -> None:
-        key = str(command.bar_type)
-        self._bars.pop(key, None)
-        await self._release(
-            from_instrument_id(command.bar_type.instrument_id), bar_period(command.bar_type), key
-        )
+        for bar_type in _command_values(command, "bar_types", "bar_type"):
+            key = str(bar_type)
+            self._bars.pop(key, None)
+            await self._release(
+                from_instrument_id(bar_type.instrument_id), bar_period(bar_type), key
+            )
 
     async def _request_instrument(self, request: Any) -> None:
-        value = await self._ensure(from_instrument_id(request.instrument_id))
-        self._handle_response(
-            InstrumentResponse(
-                self.client_id, value.id, value, request.request_id, self.clock.timestamp_ns()
+        for instrument_id_value in _command_values(request, "instrument_ids", "instrument_id"):
+            value = await self._ensure(from_instrument_id(instrument_id_value))
+            self._handle_response(
+                InstrumentResponse(
+                    self.client_id,
+                    value.id,
+                    value,
+                    request.request_id,
+                    self.clock.timestamp_ns(),
+                )
             )
-        )
 
     async def _request_instruments(self, request: Any) -> None:
         await self.instrument_provider.initialize()
@@ -331,7 +364,8 @@ class FutuDataClient(ManagedConnection, DataClient):
         )
 
     async def _subscribe_instrument(self, command: Any) -> None:
-        await self._ensure(from_instrument_id(command.instrument_id))
+        for instrument_id_value in _command_values(command, "instrument_ids", "instrument_id"):
+            await self._ensure(from_instrument_id(instrument_id_value))
 
     async def _subscribe_instruments(self, command: Any) -> None:
         await self.instrument_provider.initialize()
@@ -528,6 +562,12 @@ class FutuDataClient(ManagedConnection, DataClient):
         return result
 
     async def _request_trades(self, request: Any) -> None:
+        for instrument_id_value in _command_values(request, "instrument_ids", "instrument_id"):
+            await FutuDataClient._request_trades_one(
+                self, _RequestView(request, instrument_id=instrument_id_value)
+            )
+
+    async def _request_trades_one(self, request: Any) -> None:
         symbol = from_instrument_id(request.instrument_id)
         token = "request:" + str(request.request_id)
         await self._lease(symbol, "TICKER", token)
@@ -559,6 +599,12 @@ class FutuDataClient(ManagedConnection, DataClient):
             await self._release(symbol, "TICKER", token)
 
     async def _request_quotes(self, request: Any) -> None:
+        for instrument_id_value in _command_values(request, "instrument_ids", "instrument_id"):
+            await FutuDataClient._request_quotes_one(
+                self, _RequestView(request, instrument_id=instrument_id_value)
+            )
+
+    async def _request_quotes_one(self, request: Any) -> None:
         symbol = from_instrument_id(request.instrument_id)
         token = "request:" + str(request.request_id)
         await self._lease(symbol, "ORDER_BOOK", token)
@@ -590,6 +636,12 @@ class FutuDataClient(ManagedConnection, DataClient):
             await self._release(symbol, "ORDER_BOOK", token)
 
     async def _request_book(self, request: Any, kind: str) -> None:
+        for instrument_id_value in _command_values(request, "instrument_ids", "instrument_id"):
+            await FutuDataClient._request_book_one(
+                self, _RequestView(request, instrument_id=instrument_id_value), kind
+            )
+
+    async def _request_book_one(self, request: Any, kind: str) -> None:
         self._check_book_type(request)
         symbol = from_instrument_id(request.instrument_id)
         token = "request:" + str(request.request_id)
@@ -634,6 +686,10 @@ class FutuDataClient(ManagedConnection, DataClient):
         await self._request_book(request, "deltas")
 
     async def _request_bars(self, request: Any) -> None:
+        for bar_type in _command_values(request, "bar_types", "bar_type"):
+            await FutuDataClient._request_bars_one(self, _RequestView(request, bar_type=bar_type))
+
+    async def _request_bars_one(self, request: Any) -> None:
         self._claim_bar(request.bar_type)
         symbol = from_instrument_id(request.bar_type.instrument_id)
         await self._ensure(symbol)
@@ -773,7 +829,7 @@ class FutuDataClient(ManagedConnection, DataClient):
         content = fingerprint(row)
         if key in self._last_bars:
             if self._last_bars[key] != content:
-                # rc7 Bar has no revision flag. Retain evidence and surface the
+                # rc8 Bar has no revision flag. Retain evidence and surface the
                 # correction; do not silently overwrite an already published bar.
                 self.diagnostics.append(
                     {

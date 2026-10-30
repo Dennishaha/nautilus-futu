@@ -1,6 +1,6 @@
 # nautilus-futu
 
-独立的富途 OpenD ↔ NautilusTrader 连接器。固定 `nautilus_trader==2.0.0rc7`、`futu-api==10.11.7108`，支持 Python 3.13 / 3.14。
+独立的富途 OpenD ↔ NautilusTrader 连接器。固定 `nautilus_trader==2.0.0rc8`、`futu-api==10.11.7108`，支持 Python 3.13 / 3.14。
 
 运行时只依赖 NT、官方富途 SDK/OpenD 和 Python 标准库。长桥与 IBKR 仅供实现结构参考。本包不导入或修改数据工具、研究包、其他券商连接器；策略只调用 NT API。
 
@@ -57,7 +57,7 @@ Factory 构造时不连接 OpenD、不创建运行任务。合约加载、连接
 | 能力 | 首版行为 |
 |---|---|
 | 合约 | 港美股及 A 股 STOCK / ETF 行情资料；另支持 Futu `get_future_info` 返回的真实 HK/US FuturesContract（行情只读）；使用真实静态资料，拒绝缺少合约规模、最小变动、币种或到期时间的期货资料；A 股扩展只开放行情读取 |
-| 历史 Bar | LAST / EXTERNAL；1、5、15、30 分钟、1 小时、日线；rc7 的 60 分钟用 `1-HOUR` 表示 |
+| 历史 Bar | LAST / EXTERNAL；1、5、15、30 分钟、1 小时、日线；rc8 的 60 分钟用 `1-HOUR` 表示 |
 | 复权 / 时段 | 默认 `NoAdjust` / `RTH`；显式 `ForwardAdjust`；US 可选 ETH / ALL，HK 仅 RTH |
 | 实时 Bar | 推送只触发显式复权查询；只发布已结束周期；轮询覆盖无末根推送场景，重连历史补取 |
 | QuoteTick | 有效双边顶层盘口；单边缺失或交叉盘口不生成 QuoteTick |
@@ -69,7 +69,7 @@ Factory 构造时不连接 OpenD、不创建运行任务。合约加载、连接
 | 账户 / 持仓 | 明确账户 ID、环境、类型、状态与市场权限；资金、持仓、订单通过 NT typed reports / account state 输出 |
 | REAL 成交 | 真实 deal_id 去重；成交先于响应、部分成交和撤单期间成交；查询补账 |
 | SIMULATE 成交 | **供应商不提供成交明细查询或推送**；用 NT OrderStatusReport 的累计数量/均价对账，不伪造富途 deal_id |
-| 手续费 | 推送未提供逐笔费用；事件 commission=None；rc7 FillReport 必填 Money 的位置使用显式披露的零占位，不能当作真实零费用 |
+| 手续费 | 推送未提供逐笔费用；事件 commission=None；rc8 FillReport 必填 Money 的位置使用显式披露的零占位，不能当作真实零费用 |
 | 不支持 | 期权、期货下单、A 股下单、碎股委托、条件单/订单列表、GTD/IOC/FOK、自动价格调整、成交更正自动重记账 |
 
 订单数量/价格先以 Decimal 校验，再按 SDK 的数值参数格式传入。港股股票与 ETF 使用不同分档价格表；`.0001` 是 NT 价格表示精度，**不是全价格区间的合法委托步长**。完整分档表保存在 `info.price_ladder`，执行端使用该版本的规则严格校验。合约不绑定需要额外注册的自定义 tick scheme，因此普通 NT Catalog 可独立读取；NT 的默认 `next_bid_price/next_ask_price` 不能替代本连接器的市场价格校验。港股股票规则版本为 2026-08-03 生效版本。非港币柜台币种资料不足时需显式 `currency_overrides`；不得为未知合约填入占位元数据后执行。
@@ -78,7 +78,7 @@ Factory 构造时不连接 OpenD、不创建运行任务。合约加载、连接
 
 `FutuConnectionSettings` 支持地址、券商、加密开关、请求超时、重连退避/次数、健康检查周期、有界回调队列大小。每个 SDK context 拥有专用工作线程，NT 事件循环不执行同步 SDK 请求。超时会废弃该工作通道，迟到响应和旧连接推送不得当作新响应继续使用。
 
-行情配置包括 `adjustment`、`session`、`bar_poll_interval_secs`、`currency_overrides`、可选 `evidence_dir`。客户端创建时固定行情口径；进程级 guard 阻止同一 BarType 混入不同复权/时段。`completed_bars_only=False` 明确拒绝。rc7 没有 Bar 修订标志：已发布周期发生变化会记录 `provider_bar_revision`，不静默覆盖；原始响应可在通用证据目录保留。
+行情配置包括 `adjustment`、`session`、`bar_poll_interval_secs`、`currency_overrides`、可选 `evidence_dir`。客户端创建时固定行情口径；进程级 guard 阻止同一 BarType 混入不同复权/时段。`completed_bars_only=False` 明确拒绝。rc8 没有 Bar 修订标志：已发布周期发生变化会记录 `provider_bar_revision`，不静默覆盖；原始响应可在通用证据目录保留。rc8 的批量订阅命令使用 `instrument_ids` / `bar_types`，适配器逐项处理并保留独立的供应商租约。
 
 `ts_event` 保留供应商市场时间；`ts_init` 为实际接收时间，历史也如此。US 使用 America/New_York 夏令时规则，HK 使用 Asia/Hong_Kong。盘口时间是 OpenD 服务器接收时间；缺失时明确标记为本地接收代理，均不宣称交易所时间。
 
