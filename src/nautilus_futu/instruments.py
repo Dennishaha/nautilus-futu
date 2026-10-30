@@ -133,7 +133,8 @@ class FutuInstrumentProvider(InstrumentProvider):
                         "get_future_info", code_list=[provider_symbol(canonical)]
                     )
                     future_matches = [
-                        row for row in rows(future_payload)
+                        row
+                        for row in rows(future_payload)
                         if canonical_symbol(row["code"]) == canonical
                     ]
                     if len(future_matches) != 1:
@@ -149,7 +150,9 @@ class FutuInstrumentProvider(InstrumentProvider):
                     "get_future_info", code_list=[provider_symbol(canonical)]
                 )
                 future_matches = [
-                    row for row in rows(future_payload) if canonical_symbol(row["code"]) == canonical
+                    row
+                    for row in rows(future_payload)
+                    if canonical_symbol(row["code"]) == canonical
                 ]
                 if len(future_matches) != 1:
                     raise ConfigurationError("OpenD did not return an unambiguous real instrument")
@@ -266,7 +269,9 @@ class FutuInstrumentProvider(InstrumentProvider):
         size = decimal(row.get("size", row.get("multiplier", 0)))
         increment = decimal(row.get("min_change", row.get("price_increment", 0)))
         if size <= 0 or increment <= 0:
-            raise ConfigurationError("missing positive futures contract size or minimum price change")
+            raise ConfigurationError(
+                "missing positive futures contract size or minimum price change"
+            )
         currency_value = row.get("price_currency") or row.get("currency")
         if currency_value in (None, "", "N/A"):
             raise ConfigurationError("missing futures contract currency")

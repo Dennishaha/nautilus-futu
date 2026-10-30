@@ -37,7 +37,8 @@ def timezone(symbol: str) -> ZoneInfo:
     return ZoneInfo(
         "America/New_York"
         if value.endswith(".US")
-        else "Asia/Shanghai" if value.rsplit(".", 1)[1] in {"SH", "SZ"}
+        else "Asia/Shanghai"
+        if value.rsplit(".", 1)[1] in {"SH", "SZ"}
         else "Asia/Hong_Kong"
     )
 

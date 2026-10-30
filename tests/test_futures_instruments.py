@@ -36,17 +36,21 @@ def test_provider_uses_future_info_after_stock_basicinfo_marks_future() -> None:
             if operation == "get_stock_basicinfo":
                 return [{"code": "US.ES2606", "stock_type": "FUTURE"}], 11, None
             assert operation == "get_future_info"
-            return [
-                {
-                    "code": "US.ES2606",
-                    "owner": "ES",
-                    "exchange": "CME",
-                    "size": 50,
-                    "min_change": 0.25,
-                    "price_currency": "USD",
-                    "last_trade_time": "2026-06-19 00:00:00",
-                }
-            ], 12, None
+            return (
+                [
+                    {
+                        "code": "US.ES2606",
+                        "owner": "ES",
+                        "exchange": "CME",
+                        "size": 50,
+                        "min_change": 0.25,
+                        "price_currency": "USD",
+                        "last_trade_time": "2026-06-19 00:00:00",
+                    }
+                ],
+                12,
+                None,
+            )
 
     class Session:
         quote = Quote()
