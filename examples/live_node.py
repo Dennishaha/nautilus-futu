@@ -160,7 +160,7 @@ def main():
     finally:
         node.dispose()
     report = {
-        "node": "NT_2.0.0rc7",
+        "node": "NT_2.0.0rc8",
         "counts": dict(counts),
         "orders": "NOT_RUN",
         "unlock": "NOT_RUN",

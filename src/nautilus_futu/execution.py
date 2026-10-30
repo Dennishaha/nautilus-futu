@@ -880,7 +880,7 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
             raise UnsupportedOperation("deal corrections cannot be published as ordinary fills")
         instrument = self.instrument_provider.find(instrument_id(row["code"]))
         client = self._clients.get(str(row["order_id"]))
-        # NT rc7 FillReport requires Money. Zero is a structural placeholder,
+        # NT rc8 FillReport requires Money. Zero is a structural placeholder,
         # explicitly disclosed in account info/diagnostics, never certified fees.
         return FillReport(
             self.account_id,

@@ -100,7 +100,7 @@ class FutuDataClientConfig(_SafeConfig, DataClientConfig):
         if adjustment not in {"NoAdjust", "ForwardAdjust"} or session not in {"RTH", "ETH", "ALL"}:
             raise ConfigurationError("unsupported adjustment/session")
         if not completed_bars_only:
-            raise ConfigurationError("rc7 connector publishes completed bars only")
+            raise ConfigurationError("rc8 connector publishes completed bars only")
         if not math.isfinite(bar_poll_interval_secs) or bar_poll_interval_secs < 1:
             raise ConfigurationError("bar_poll_interval_secs must be >= 1")
         if evidence_dir is not None and not evidence_dir.strip():

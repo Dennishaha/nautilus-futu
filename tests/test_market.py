@@ -5,6 +5,7 @@ import threading
 import time
 from decimal import Decimal
 from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock
 
 import pytest
 from nautilus_trader.common import Clock
@@ -195,6 +196,26 @@ async def test_bar_policy_and_historical_response_id(server):
             other._claim_bar(bar_type)
     finally:
         await client._disconnect()
+
+
+async def test_batch_quote_subscription_keeps_independent_provider_leases(server):
+    client = data_client(server)
+    second_static = static("HK.02800")
+    second_static["stock_id"] = 2800
+    client.instrument_provider.add(client.instrument_provider.from_static(second_static))
+    client._activate = AsyncMock()
+    command = NS(
+        instrument_ids=[instrument_id("00700.HK"), instrument_id("02800.HK")],
+    )
+
+    await client._subscribe_quotes(command)
+
+    assert client._quotes == {"00700.HK", "02800.HK"}
+    assert set(client._leases) == {
+        ("00700.HK", "ORDER_BOOK"),
+        ("02800.HK", "ORDER_BOOK"),
+    }
+    assert client._activate.await_count == 2
 
 
 async def test_bounded_queue_and_thread_lane(server):

@@ -13,7 +13,7 @@ flowchart LR
 
 唯一生产 context 构造入口在 `transport.OpenDContextFactory`。`factories` 只实例化配置、Provider 与客户端；SDK 连接由 `_connect` 建立，`_disconnect` 关闭。没有研究服务、其他供应商、HTTP 下载器或任务调度依赖。`tests/test_boundary.py` 对源代码导入白名单和示例 SDK 直连做静态检查。
 
-独立包的结构参考用户长桥连接器；Factory / Provider / 启动对账职责参考 [NT 官方 IBKR](https://github.com/nautechsystems/nautilus_trader/tree/develop/crates/adapters/interactive_brokers)。接口签名以本机安装的 rc7 为准；不从参考连接器导入任何运行时代码。
+独立包的结构参考用户长桥连接器；Factory / Provider / 启动对账职责参考 [NT 官方 IBKR](https://github.com/nautechsystems/nautilus_trader/tree/develop/crates/adapters/interactive_brokers)。接口签名以本机安装的 rc8 为准；批量订阅字段由适配器逐项映射到供应商租约；不从参考连接器导入任何运行时代码。
 
 ## 生命周期与并发
 
@@ -31,7 +31,7 @@ SDK 回调在工作线程中只拆包和入队，队列在调度事件循环之�
 
 富途静态基础资料不提供可靠币种字段；常规 US 使用 USD、常规 HK 使用 HKD 并标记依据。HK 8 开头柜台及 ETF 美元柜台需显式币种覆盖。每手数量、证券类别、stock_id 和真实交易所不足时不开放委托。
 
-股票价格规则使用 [HKEX 股票最小价差调整](https://www.hkex.com.hk/Services/Trading/Securities/Overview/Trading-Mechanism/Reduction-of-Minimum-Spreads?sc_lang=en) 的 2026-08-03 第二阶段版本；ETF 使用 [HKEX ETP 投资者价差表](https://www.hkex.com.hk/products/securities/exchange-traded-products/investors?sc_lang=en)。两张表以可序列化的 `info.price_ladder` 分别保存，并对每个分界点回归验证。rc7 Catalog 的自定义 tick scheme 名称在新进程中无法自行解析，因此 Equity.tick_scheme 留空，避免要求 Catalog 读取端初始化供应商连接器。NT price_increment 仅为表示精度，执行端另外按版本分档校验。不能把当前 bid/ask 价差当作固定 tick。规则有生效日期，不代表所有历史日期的执行规则。
+股票价格规则使用 [HKEX 股票最小价差调整](https://www.hkex.com.hk/Services/Trading/Securities/Overview/Trading-Mechanism/Reduction-of-Minimum-Spreads?sc_lang=en) 的 2026-08-03 第二阶段版本；ETF 使用 [HKEX ETP 投资者价差表](https://www.hkex.com.hk/products/securities/exchange-traded-products/investors?sc_lang=en)。两张表以可序列化的 `info.price_ladder` 分别保存，并对每个分界点回归验证。rc8 Catalog 的自定义 tick scheme 名称在新进程中无法自行解析，因此 Equity.tick_scheme 留空，避免要求 Catalog 读取端初始化供应商连接器。NT price_increment 仅为表示精度，执行端另外按版本分档校验。不能把当前 bid/ask 价差当作固定 tick。规则有生效日期，不代表所有历史日期的执行规则。
 
 US 使用 [富途下单文档](https://openapi.futunn.com/futu-api-doc/trade/place-order.html) 的小于 $1 四位、其他两位精度；改单保守限制在 SDK 文档的三位精度以内，避免供应商静默舍入。所有价格与数量先转 Decimal 校验，不自动改价、拆手数或补齐元数据。
 
@@ -39,7 +39,7 @@ US 使用 [富途下单文档](https://openapi.futunn.com/futu-api-doc/trade/pla
 
 历史请求按市场本地日期分页，按 `ts_event` 二次过滤；相同事件时间重叠且 OHLCV 一致可合并，冲突、游标不前进、错误合约或异常分页明确报错。取消会穿透等待，不交付迟到结果。每页使用真实响应收到时间作为其 `ts_init`。
 
-rc7 会使用 response 边界裁剪历史数据，而历史 `ts_init` 必然晚于历史区间。适配器完成 `ts_event` 区间过滤后，以原 request_id 返回 BarsResponse，但 response.start/end 留空，原请求区间保留在 params。真实节点集成测试覆盖了“历史区间远早于实际接收时间”且仍收到标准回调；不伪造 `ts_init` 来绕开问题。
+rc8 会使用 response 边界裁剪历史数据，而历史 `ts_init` 必然晚于历史区间。适配器完成 `ts_event` 区间过滤后，以原 request_id 返回 BarsResponse，但 response.start/end 留空，原请求区间保留在 params。真实节点集成测试覆盖了“历史区间远早于实际接收时间”且仍收到标准回调；不伪造 `ts_init` 来绕开问题。
 
 [实时 K 线接口](https://openapi.futunn.com/futu-api-doc/quote/get-kl.html) 默认前复权；[K 线推送](https://openapi.futunn.com/futu-api-doc/quote/update-kl.html) 未保留足够复权语义。因此推送仅触发 `get_cur_kline(autype=...)`，历史同样显式传 autype/session。US 时段由订阅 session 固定。进程中某一 BarType 首次声明的口径保留到进程结束，断开客户端也不能把同一类型改成另一复权口径。Catalog 的跨进程隔离由调用方负责。
 
@@ -47,7 +47,7 @@ rc7 会使用 response 边界裁剪历史数据，而历史 `ts_init` 必然晚�
 
 QuoteTick / TradeTick / L2 保留真实本地接收 `ts_init`。L2 时间优先取两侧 OpenD 服务器接收时间，分别保存在 FutuSourceEvent 中；没有该时间时标记 local_receipt_proxy。完整快照转为 CLEAR + ADD，sequence=0 明示供应商未提供 NT 意义上的盘口序号。只对有效双边顶层生成报价。
 
-逐笔以 `(合约, 市场本地日期, sequence)` 作为来源身份，TradeId 用稳定摘要编码到 rc7 的 36 字符范围。成交条件冲突明确失败；来源不同的重复 CACHE / REALTIME 行按同一 sequence 合并。没有 sequence 时分配 `U-...` ID，每行保留，不能按价格/数量/时间摘要删除。主动方向按[富途逐笔定义](https://openapi.futunn.com/futu-api-doc/quote/update-ticker.html)映射，未知/中性保留 NO_AGGRESSOR。原始条件和推送来源通过 NT CustomData 伴随输出。
+逐笔以 `(合约, 市场本地日期, sequence)` 作为来源身份，TradeId 用稳定摘要编码到 rc8 的 36 字符范围。成交条件冲突明确失败；来源不同的重复 CACHE / REALTIME 行按同一 sequence 合并。没有 sequence 时分配 `U-...` ID，每行保留，不能按价格/数量/时间摘要删除。主动方向按[富途逐笔定义](https://openapi.futunn.com/futu-api-doc/quote/update-ticker.html)映射，未知/中性保留 NO_AGGRESSOR。原始条件和推送来源通过 NT CustomData 伴随输出。
 
 可选公共行情信封采用规范 JSON 与 SHA256，NaN/Infinity 和二进制分页键使用有类型标记的无损文本表示。数据异常不会被改成正常数值。原始证据只是供应商响应的记录，不认证复权质量、连续性或历史可用时间。
 
@@ -67,7 +67,7 @@ REAL 订单变化与成交通过客户端输出函数提交；累计成交数量
 
 每次成功查询完整持仓快照后，对已报告/NT Cache 中本账户原有、现在消失的合约输出 FLAT 报告。全部变化经 NT 输出接口，不直接修改 Cache 或 Engine。
 
-手续费不在富途成交响应中；事件允许 commission=None，rc7 FillReport 必填 Money 时使用零占位并明确标记 UNREPORTED。不要用该占位认证实际交易成本；需要费用的应用应经 NT 账户信息/报告做后续处理，不能引入研究旁路。
+手续费不在富途成交响应中；事件允许 commission=None，rc8 FillReport 必填 Money 时使用零占位并明确标记 UNREPORTED。不要用该占位认证实际交易成本；需要费用的应用应经 NT 账户信息/报告做后续处理，不能引入研究旁路。
 
 ## 验收边界
 
