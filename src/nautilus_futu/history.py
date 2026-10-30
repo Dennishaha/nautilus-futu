@@ -44,12 +44,21 @@ def make_bar(bar_type: Any, row: dict, received_ns: int) -> Bar:
         or low > high
     ):
         raise ValueError("invalid provider OHLC; original response must not be repaired")
+    # OpenD history can exceed 8dp. Preserve source digits with a uniform
+    # history precision: NT Catalog identities include price_precision.
+    # Values beyond 16dp still fail exact conversion; never round them.
+    prices = [price(value, 16) for value in (opening, high, low, close)]
+    if any(
+        value.as_decimal() != original
+        for value, original in zip(prices, (opening, high, low, close), strict=True)
+    ):
+        raise ValueError("historical price cannot be represented exactly by NT")
     return Bar(
         bar_type,
-        price(opening, 8),
-        price(high, 8),
-        price(low, 8),
-        price(close, 8),
+        prices[0],
+        prices[1],
+        prices[2],
+        prices[3],
         quantity(volume),
         timestamp_ns(row["time_key"], str(bar_type.instrument_id.symbol)),
         received_ns,

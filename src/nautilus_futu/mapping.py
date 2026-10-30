@@ -33,8 +33,12 @@ def quantity(value: Any) -> Quantity:
 
 
 def timezone(symbol: str) -> ZoneInfo:
+    value = canonical_symbol(symbol)
     return ZoneInfo(
-        "America/New_York" if canonical_symbol(symbol).endswith(".US") else "Asia/Hong_Kong"
+        "America/New_York"
+        if value.endswith(".US")
+        else "Asia/Shanghai" if value.rsplit(".", 1)[1] in {"SH", "SZ"}
+        else "Asia/Hong_Kong"
     )
 
 

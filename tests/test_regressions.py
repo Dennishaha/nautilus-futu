@@ -7,6 +7,7 @@ from nautilus_futu import FutuInstrumentProvider
 from nautilus_futu.history import bar_period
 from nautilus_futu.instruments import HK_ETF, HK_STOCK, tick_size
 from nautilus_futu.mapping import decimal, timestamp_ns
+from nautilus_futu.symbols import canonical_symbol, provider_symbol
 from tests.fakes import RECEIVED, candle, fill_row, static
 from tests.test_execution import execution_client, order
 from tests.test_market import data_client
@@ -37,6 +38,12 @@ def test_metadata_preserves_every_price_tier_without_catalog_registry_dependency
 )
 def test_supported_bar_periods(spec, expected):
     assert bar_period(BarType.from_str(f"00700.HK.FUTU-{spec}-LAST-EXTERNAL")) == expected
+
+
+def test_mainland_equity_symbol_and_timezone_mapping() -> None:
+    assert canonical_symbol("002097.SZ") == "002097.SZ"
+    assert provider_symbol("002097.SZ") == "SZ.002097"
+    assert canonical_symbol("600000.SH") == "600000.SH"
 
 
 async def test_hk_auction_and_shortened_hour_bar_completion(server):

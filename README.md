@@ -24,6 +24,8 @@ uv run python examples/live_node.py --seconds 10 --history-date 2026-10-23 \
 
 Catalog 的管理、历史任务编排、质量审计和研究均由调用方在 NT 层完成。不同复权/时段必须使用独立进程、独立 Catalog；不能因经过 NT 就把数据视为质量合格。
 
+历史OHLC使用统一16位小数保留OpenD源数字，避免9位历史价格被原8位限制拒绝，同时满足NT Catalog同一BarType的精度一致性；超过16位仍拒绝，不四舍五入、不修复非法OHLC，真实获取时间保持不变。交易订单的价格刻度校验沿用原规则。历史日线时段与执行质量仍需调用方核实，`session=RTH`参数本身不代表日线验收通过。
+
 ## 公共接口
 
 ```python
@@ -54,7 +56,7 @@ Factory 构造时不连接 OpenD、不创建运行任务。合约加载、连接
 
 | 能力 | 首版行为 |
 |---|---|
-| 合约 | 港美股 STOCK / ETF；使用真实静态资料，拒绝缺少 stock_id、每手数量、交易所的合约 |
+| 合约 | 港美股及 A 股 STOCK / ETF 行情资料；另支持 Futu `get_future_info` 返回的真实 HK/US FuturesContract（行情只读）；使用真实静态资料，拒绝缺少合约规模、最小变动、币种或到期时间的期货资料；A 股扩展只开放行情读取 |
 | 历史 Bar | LAST / EXTERNAL；1、5、15、30 分钟、1 小时、日线；rc7 的 60 分钟用 `1-HOUR` 表示 |
 | 复权 / 时段 | 默认 `NoAdjust` / `RTH`；显式 `ForwardAdjust`；US 可选 ETH / ALL，HK 仅 RTH |
 | 实时 Bar | 推送只触发显式复权查询；只发布已结束周期；轮询覆盖无末根推送场景，重连历史补取 |
@@ -68,7 +70,7 @@ Factory 构造时不连接 OpenD、不创建运行任务。合约加载、连接
 | REAL 成交 | 真实 deal_id 去重；成交先于响应、部分成交和撤单期间成交；查询补账 |
 | SIMULATE 成交 | **供应商不提供成交明细查询或推送**；用 NT OrderStatusReport 的累计数量/均价对账，不伪造富途 deal_id |
 | 手续费 | 推送未提供逐笔费用；事件 commission=None；rc7 FillReport 必填 Money 的位置使用显式披露的零占位，不能当作真实零费用 |
-| 不支持 | 期权、期货、A 股、碎股委托、条件单/订单列表、GTD/IOC/FOK、自动价格调整、成交更正自动重记账 |
+| 不支持 | 期权、期货下单、A 股下单、碎股委托、条件单/订单列表、GTD/IOC/FOK、自动价格调整、成交更正自动重记账 |
 
 订单数量/价格先以 Decimal 校验，再按 SDK 的数值参数格式传入。港股股票与 ETF 使用不同分档价格表；`.0001` 是 NT 价格表示精度，**不是全价格区间的合法委托步长**。完整分档表保存在 `info.price_ladder`，执行端使用该版本的规则严格校验。合约不绑定需要额外注册的自定义 tick scheme，因此普通 NT Catalog 可独立读取；NT 的默认 `next_bid_price/next_ask_price` 不能替代本连接器的市场价格校验。港股股票规则版本为 2026-08-03 生效版本。非港币柜台币种资料不足时需显式 `currency_overrides`；不得为未知合约填入占位元数据后执行。
 

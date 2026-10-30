@@ -10,18 +10,35 @@ VENUE = Venue("FUTU")
 
 
 def canonical_symbol(value: str) -> str:
-    value = value.strip().upper()
-    if value.startswith(("HK.", "US.")):
+    original = value.strip()
+    value = original.upper()
+    if value.startswith(("HK.", "US.", "SH.", "SZ.")):
         market, ticker = value.split(".", 1)
+        original_ticker = original.split(".", 1)[1]
     else:
         ticker, separator, market = value.rpartition(".")
         if not separator:
             raise ConfigurationError("symbols must include HK/US market")
+        original_ticker = original.rpartition(".")[0]
     if market == "HK":
-        if not ticker.isdigit() or not 1 <= len(ticker) <= 5 or int(ticker) == 0:
-            raise ConfigurationError("invalid Hong Kong equity symbol")
-        ticker = ticker.zfill(5)
-    elif market != "US" or not re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+        if ticker.isdigit():
+            if not 1 <= len(ticker) <= 5 or int(ticker) == 0:
+                raise ConfigurationError("invalid Hong Kong equity symbol")
+            ticker = ticker.zfill(5)
+        elif re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+            # Futu uses case-sensitive `main` suffixes for continuous futures.
+            if original_ticker.lower().endswith("main"):
+                ticker = original_ticker[:-4].upper() + "main"
+        else:
+            raise ConfigurationError("invalid Hong Kong symbol")
+    elif market in {"SH", "SZ"}:
+        if not ticker.isdigit() or not 1 <= len(ticker) <= 6 or int(ticker) == 0:
+            raise ConfigurationError("invalid mainland China equity symbol")
+        ticker = ticker.zfill(6)
+    elif market == "US" and re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,19}", ticker):
+        if original_ticker.lower().endswith("main"):
+            ticker = original_ticker[:-4].upper() + "main"
+    else:
         raise ConfigurationError("unsupported equity symbol")
     return f"{ticker}.{market}"
 
