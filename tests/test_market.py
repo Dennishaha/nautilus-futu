@@ -18,7 +18,12 @@ from nautilus_futu import (
     FutuDataClientConfig,
     FutuInstrumentProvider,
 )
-from nautilus_futu.errors import ConfigurationError, DataConflict, RequestUncertain
+from nautilus_futu.errors import (
+    ConfigurationError,
+    DataConflict,
+    RequestUncertain,
+    UnsupportedOperation,
+)
 from nautilus_futu.evidence import Evidence
 from nautilus_futu.history import history_rows
 from nautilus_futu.instruments import tick_size, validate_order
@@ -173,6 +178,21 @@ async def test_tick_identity_and_aggressor(server):
     a = await client._trade_tick("00700.HK", {**row, "sequence": None}, RECEIVED, deduplicate=True)
     b = await client._trade_tick("00700.HK", {**row, "sequence": None}, RECEIVED, deduplicate=True)
     assert a.trade_id != b.trade_id
+
+
+async def test_current_us_eth_bars_fail_closed_when_session_is_unverifiable(server):
+    client = data_client(server, session="ETH")
+    aapl = static("US.AAPL")
+    aapl["stock_id"] = 265598
+    client.instrument_provider.add(client.instrument_provider.from_static(aapl))
+    bar_type = BarType.from_str("AAPL.US.FUTU-1-MINUTE-LAST-EXTERNAL")
+    request = NS(bar_type=bar_type, request_id=UUID4(), start_ns=None, end_ns=None, limit=1)
+    try:
+        with pytest.raises(UnsupportedOperation, match="cannot be verified"):
+            await client._request_bars(request)
+        assert not any(call[0] == "get_cur_kline" for call in server.calls)
+    finally:
+        await client._disconnect()
 
 
 async def test_bar_policy_and_historical_response_id(server):

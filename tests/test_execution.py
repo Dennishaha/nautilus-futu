@@ -67,7 +67,9 @@ async def execution_client(server, **kwargs):
         "order_denied",
         "order_updated",
         "order_modify_rejected",
+        "order_modify_denied",
         "order_cancel_rejected",
+        "order_cancel_denied",
         "account_state",
     ]:
         setattr(client, "generate_" + name, lambda *args, _name=name: events.append((_name, args)))
@@ -117,6 +119,20 @@ async def test_push_before_submit_response_and_partial_cancel(server):
         assert [kind for kind, _ in events].count("order_filled") == 1
         assert [kind for kind, _ in events].count("order_canceled") == 1
         assert client._filled["O-1"] == 40
+    finally:
+        await client._disconnect()
+
+
+async def test_local_modify_cancel_refusals_emit_denied(server):
+    client, events = await execution_client(server, dry_run=False)
+    pending = order()
+    client._pending[str(pending.client_order_id)] = pending
+    try:
+        await client._modify_order(
+            NS(order=pending, quantity=Quantity.from_int(200), price=Price.from_str("101.0000"))
+        )
+        await client._cancel_order(NS(order=pending))
+        assert [kind for kind, _ in events] == ["order_modify_denied", "order_cancel_denied"]
     finally:
         await client._disconnect()
 
@@ -220,6 +236,8 @@ async def test_typed_reports_unknown_fee_and_account_valuation(server):
         ("CANCELLED_PART", OrderStatus.CANCELED),
         ("FILLED_ALL", OrderStatus.FILLED),
         ("FAILED", OrderStatus.REJECTED),
+        ("TIMEOUT", OrderStatus.SUBMITTED),
+        ("FILL_CANCELLED", OrderStatus.SUBMITTED),
     ],
 )
 def test_status_mapping(name, expected):

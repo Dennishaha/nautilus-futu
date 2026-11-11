@@ -4,9 +4,10 @@ import asyncio
 import re
 import time
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from nautilus_trader.live.providers import InstrumentProvider
 from nautilus_trader.model import (
@@ -49,6 +50,8 @@ HK_ETF = (
     ("2000", "0.5"),
     ("9999", "1"),
 )
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 def tick_size(symbol: str, security_type: str, value: Decimal) -> Decimal:
@@ -140,6 +143,8 @@ class FutuInstrumentProvider(InstrumentProvider):
                     future_payload, future_received, _ = await session.quote.call(
                         "get_future_info", code_list=[provider_symbol(canonical)]
                     )
+                    if session is not self.session:
+                        raise ConnectionError("instrument response belongs to an obsolete connection")
                     future_matches = [
                         row
                         for row in rows(future_payload)
@@ -161,6 +166,8 @@ class FutuInstrumentProvider(InstrumentProvider):
                 future_payload, future_received, _ = await session.quote.call(
                     "get_future_info", code_list=[provider_symbol(canonical)]
                 )
+                if session is not self.session:
+                    raise ConnectionError("instrument response belongs to an obsolete connection")
                 future_matches = [
                     row
                     for row in rows(future_payload)
@@ -262,8 +269,18 @@ class FutuInstrumentProvider(InstrumentProvider):
             raise ConfigurationError("missing futures contract expiration")
         stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=UTC)
-        return int(stamp.timestamp() * 1_000_000_000)
+            zone_name = row.get("time_zone") or row.get("timezone")
+            if not zone_name:
+                raise ConfigurationError(
+                    "naive futures expiration requires the provider time_zone field"
+                )
+            try:
+                stamp = stamp.replace(tzinfo=ZoneInfo(str(zone_name)))
+            except ZoneInfoNotFoundError as exc:
+                raise ConfigurationError(
+                    f"unknown futures expiration time zone {zone_name!r}"
+                ) from exc
+        return (stamp.astimezone(UTC) - _EPOCH) // timedelta(microseconds=1) * 1000
 
     @staticmethod
     def _future_asset_class(root: str, row: dict) -> AssetClass:

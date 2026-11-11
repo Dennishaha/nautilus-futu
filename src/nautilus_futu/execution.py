@@ -56,6 +56,11 @@ def order_status(row: dict) -> OrderStatus:
         "CANCELLED_ALL": OrderStatus.CANCELED,
         "SUBMIT_FAILED": OrderStatus.REJECTED,
         "FAILED": OrderStatus.REJECTED,
+        # OpenD reports TIMEOUT and FILL_CANCELLED as provider-side uncertain
+        # states. Keep the order open for reconciliation instead of inventing a
+        # rejection or a compensating fill.
+        "TIMEOUT": OrderStatus.SUBMITTED,
+        "FILL_CANCELLED": OrderStatus.SUBMITTED,
         "DISABLED": OrderStatus.EXPIRED,
         "DELETED": OrderStatus.EXPIRED,
     }
@@ -438,6 +443,17 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
                 raise UnsupportedOperation("OpenD modify_order supports only three price decimals")
             if decimal(qty) < self._filled[client]:
                 raise ConfigurationError("amended quantity is below already filled quantity")
+        except (ConfigurationError, UnsupportedOperation) as exc:
+            self.generate_order_modify_denied(
+                order, str(exc), self.clock.timestamp_ns()
+            )
+            return
+        except RequestUncertain:
+            self.diagnostics.append({"kind": "amendment_uncertain", "venue_order_id": venue})
+            self._disruption("amendment_uncertain")
+            return
+
+        try:
             self._amendments[venue] = (qty, px)
             await self._trade_call(
                 "modify_order",
@@ -459,8 +475,11 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
             self.diagnostics.append({"kind": "amendment_uncertain", "venue_order_id": venue})
             self._disruption("amendment_uncertain")
         except Exception as exc:
+            # A deterministic provider rejection cannot be confirmed later by an
+            # unrelated order snapshot. Keep the marker only for uncertainty.
+            self._amendments.pop(venue, None)
             self.generate_order_modify_rejected(
-                order, VenueOrderId(venue) if venue else None, str(exc), self.clock.timestamp_ns()
+                order, VenueOrderId(venue), str(exc), self.clock.timestamp_ns()
             )
 
     async def _cancel_order(self, command: Any) -> None:
@@ -473,6 +492,17 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
                 raise ConfigurationError(
                     "submission is uncertain; wait for venue identity before cancel"
                 )
+        except (ConfigurationError, UnsupportedOperation) as exc:
+            self.generate_order_cancel_denied(
+                order, str(exc), self.clock.timestamp_ns()
+            )
+            return
+        except RequestUncertain:
+            self.diagnostics.append({"kind": "cancellation_uncertain", "venue_order_id": venue})
+            self._disruption("cancellation_uncertain")
+            return
+
+        try:
             await self._trade_call(
                 "modify_order",
                 **self._account_args(),
@@ -490,7 +520,7 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
             self._disruption("cancellation_uncertain")
         except Exception as exc:
             self.generate_order_cancel_rejected(
-                order, VenueOrderId(venue) if venue else None, str(exc), self.clock.timestamp_ns()
+                order, VenueOrderId(venue), str(exc), self.clock.timestamp_ns()
             )
 
     async def _cancel_all_orders(self, command: Any) -> None:
@@ -518,21 +548,75 @@ class FutuExecutionClient(ManagedConnection, ExecutionClient):
             if event.kind == "orders":
                 await self._process_order_row(row)
             elif event.kind == "fills":
+                raw_client = self._clients.get(str(row.get("order_id", ""))) or self._remarks.get(
+                    str(row.get("remark", ""))
+                )
+                if raw_client is None:
+                    try:
+                        instrument_id(row["code"])
+                    except (UnsupportedOperation, ValueError) as exc:
+                        self.diagnostics.append(
+                            {
+                                "kind": "unsupported_external_product_omitted",
+                                "code": row.get("code"),
+                                "venue_order_id": str(row.get("order_id", "")),
+                                "error_type": type(exc).__name__,
+                            }
+                        )
+                        continue
                 if str(row["order_id"]) not in self._clients:
                     records = await self._trade_rows(
                         "order_list_query", order_id=str(row["order_id"])
                     )
                     for record in records:
                         self._identify(record)
-                await self._process_fill(row)
+                try:
+                    await self._process_fill(row)
+                except (UnsupportedOperation, ValueError) as exc:
+                    if raw_client is not None:
+                        raise DataConflict(
+                            "owned fill changed to an unsupported instrument"
+                        ) from exc
+                    self.diagnostics.append(
+                        {
+                            "kind": "unsupported_external_product_omitted",
+                            "code": row.get("code"),
+                            "venue_order_id": str(row.get("order_id", "")),
+                            "error_type": type(exc).__name__,
+                        }
+                    )
 
     async def _process_order_row(
         self, row: dict, available_fills: list[dict] | None = None
     ) -> None:
         if row.get("_opend_acc_id") != self._futu_config.acc_id:
             raise ConfigurationError("order report is not scoped to the configured account")
-        client = self._identify(row)
-        await self._ensure(instrument_id(row["code"]))
+        raw_venue = str(row.get("order_id", ""))
+        raw_client = self._clients.get(raw_venue) or self._remarks.get(str(row.get("remark", "")))
+        try:
+            client = self._identify(row)
+            await self._ensure(instrument_id(row["code"]))
+        except (UnsupportedOperation, ValueError) as exc:
+            if raw_client is not None:
+                raise DataConflict("owned order changed to an unsupported instrument") from exc
+            self.diagnostics.append(
+                {
+                    "kind": "unsupported_external_product_omitted",
+                    "code": row.get("code"),
+                    "venue_order_id": raw_venue,
+                    "error_type": type(exc).__name__,
+                }
+            )
+            return
+        if row.get("order_status") in {"TIMEOUT", "FILL_CANCELLED"}:
+            self.diagnostics.append(
+                {
+                    "kind": "provider_order_state_requires_reconciliation",
+                    "order_status": row["order_status"],
+                    "venue_order_id": raw_venue,
+                    "client_order_id": client,
+                }
+            )
         if client is None:
             try:
                 report = self._order_report(row)

@@ -19,6 +19,7 @@ def test_future_static_metadata_becomes_real_nt_contract() -> None:
             "min_change": 0.25,
             "price_currency": "USD",
             "last_trade_time": "2026-06-19 00:00:00",
+            "time_zone": "America/Chicago",
         },
         1_000_000_000,
     )
@@ -46,6 +47,7 @@ def test_provider_uses_future_info_after_stock_basicinfo_marks_future() -> None:
                         "min_change": 0.25,
                         "price_currency": "USD",
                         "last_trade_time": "2026-06-19 00:00:00",
+                        "time_zone": "America/Chicago",
                     }
                 ],
                 12,

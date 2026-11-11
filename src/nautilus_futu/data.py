@@ -110,12 +110,20 @@ class FutuDataClient(ManagedConnection, DataClient):
         self._last_bars: OrderedDict[tuple[str, int], tuple] = OrderedDict()
         self._last_bar_ns: dict[str, int] = {}
         self._calendar: dict[tuple[str, str], str | None] = {}
+        self._published_instruments: set[str] = set()
+
+    def _publish_instrument_once(self, instrument: Any) -> None:
+        key = str(instrument.id)
+        if key in self._published_instruments:
+            return
+        self._published_instruments.add(key)
+        self._handle_instrument(instrument)
 
     async def _after_connect(self) -> None:
         self._active.clear()
         await self.instrument_provider.initialize()
         for value in self.instrument_provider.list_all():
-            self._handle_instrument(value)
+            self._publish_instrument_once(value)
         for (symbol, subtype), consumers in list(self._leases.items()):
             if consumers:
                 await self._activate(symbol, subtype)
@@ -178,7 +186,7 @@ class FutuDataClient(ManagedConnection, DataClient):
             value = self.instrument_provider.find(identifier)
         if value is None:
             raise ConfigurationError("instrument loading did not return a definition")
-        self._handle_instrument(value)
+        self._publish_instrument_once(value)
         return value
 
     async def _activate(self, symbol: str, subtype: str) -> None:
@@ -372,7 +380,7 @@ class FutuDataClient(ManagedConnection, DataClient):
     async def _subscribe_instruments(self, command: Any) -> None:
         await self.instrument_provider.initialize()
         for value in self.instrument_provider.list_all():
-            self._handle_instrument(value)
+            self._publish_instrument_once(value)
 
     async def _unsubscribe_instrument(self, command: Any) -> None:
         return
@@ -691,6 +699,12 @@ class FutuDataClient(ManagedConnection, DataClient):
         for bar_type in _command_values(request, "bar_types", "bar_type"):
             await FutuDataClient._request_bars_one(self, _RequestView(request, bar_type=bar_type))
 
+    def _require_current_bar_session(self, symbol: str) -> None:
+        if symbol.endswith(".US") and self._trade_session != "RTH":
+            raise UnsupportedOperation(
+                "current US bars cannot be verified for ETH/ALL with OpenD get_cur_kline"
+            )
+
     async def _request_bars_one(self, request: Any) -> None:
         self._claim_bar(request.bar_type)
         symbol = from_instrument_id(request.bar_type.instrument_id)
@@ -705,6 +719,7 @@ class FutuDataClient(ManagedConnection, DataClient):
                 self._trade_session,
             )
         else:
+            self._require_current_bar_session(symbol)
             token = "request:" + str(request.request_id)
             period = bar_period(request.bar_type)
             await self._lease(symbol, period, token)
@@ -809,6 +824,7 @@ class FutuDataClient(ManagedConnection, DataClient):
         if self._session is None:
             return
         symbol, period = from_instrument_id(bar_type.instrument_id), bar_period(bar_type)
+        self._require_current_bar_session(symbol)
         payload, received, _ = await self._quote_call(
             "get_cur_kline",
             code=provider_symbol(symbol),
