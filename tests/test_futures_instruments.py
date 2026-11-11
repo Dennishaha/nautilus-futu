@@ -64,6 +64,49 @@ def test_provider_uses_future_info_after_stock_basicinfo_marks_future() -> None:
     asyncio.run(run())
 
 
+def test_equity_missing_static_info_does_not_fallback_to_future_endpoint() -> None:
+    class Quote:
+        async def call(self, operation, **kwargs):
+            assert operation == "get_stock_basicinfo"
+            return [], 11, None
+
+    class Session:
+        quote = Quote()
+
+    async def run() -> None:
+        provider = FutuInstrumentProvider()
+        provider.set_session(Session())
+        with pytest.raises(ConfigurationError, match="real equity instrument"):
+            await provider.load_symbols_async(["SPLK.US"])
+
+    asyncio.run(run())
+
+
+def test_equity_metadata_response_is_recorded_before_rejection() -> None:
+    calls = []
+
+    class Quote:
+        async def call(self, operation, **kwargs):
+            assert operation == "get_stock_basicinfo"
+            payload = [{"code": "US.SPLK", "stock_type": "UNKNOWN"}]
+            calls.append((operation, kwargs, payload, 11))
+            return payload, 11, None
+
+    class Session:
+        quote = Quote()
+
+    async def run() -> None:
+        provider = FutuInstrumentProvider(evidence=lambda *item: calls.append(item))
+        provider.set_session(Session())
+        with pytest.raises(ConfigurationError, match="real equity instrument"):
+            await provider.load_symbols_async(["SPLK.US"])
+
+    asyncio.run(run())
+    assert calls[-1][0] == "get_stock_basicinfo"
+    assert calls[-1][1]["code_list"] == ["US.SPLK"]
+    assert calls[-1][2] == [{"code": "US.SPLK", "stock_type": "UNKNOWN"}]
+
+
 def test_future_static_metadata_requires_currency_and_expiration() -> None:
     provider = FutuInstrumentProvider()
     row = {

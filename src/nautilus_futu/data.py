@@ -56,7 +56,7 @@ _POLICY_LOCK = threading.Lock()
 
 
 def _command_values(command: Any, plural: str, singular: str) -> tuple[Any, ...]:
-    """Return rc8 batch fields while retaining compatibility with rc7 test doubles."""
+    """Return NT batch fields while retaining compatibility with older test doubles."""
     values = getattr(command, plural, None)
     if values is not None:
         return tuple(values)
@@ -65,7 +65,7 @@ def _command_values(command: Any, plural: str, singular: str) -> tuple[Any, ...]
 
 
 class _RequestView:
-    """Expose one member of an rc8 batch request to the existing single-item path."""
+    """Expose one member of a batch request to the existing single-item path."""
 
     def __init__(self, request: Any, **values: Any) -> None:
         self._request = request
@@ -86,13 +86,15 @@ class FutuDataClient(ManagedConnection, DataClient):
         instrument_provider: FutuInstrumentProvider | None = None,
         **kwargs: Any,
     ) -> None:
+        self._evidence = Evidence(config.evidence_dir)
         provider = instrument_provider or FutuInstrumentProvider(
-            config.instrument_provider, currency_overrides=config.currency_overrides
+            config.instrument_provider,
+            currency_overrides=config.currency_overrides,
+            evidence=self._evidence.record,
         )
         super().__init__(config=config, venue=VENUE, instrument_provider=provider, **kwargs)
         self._init_connection(config, context_factory)
         self._adjustment, self._trade_session = config.adjustment, config.session
-        self._evidence = Evidence(config.evidence_dir)
         self._leases: dict[tuple[str, str], set[str]] = {}
         self._active: dict[tuple[str, str], float] = {}
         self._unsubscribe_tasks: dict[tuple[str, str], Any] = {}
@@ -829,7 +831,7 @@ class FutuDataClient(ManagedConnection, DataClient):
         content = fingerprint(row)
         if key in self._last_bars:
             if self._last_bars[key] != content:
-                # rc8 Bar has no revision flag. Retain evidence and surface the
+                # rc9 Bar has no revision flag. Retain evidence and surface the
                 # correction; do not silently overwrite an already published bar.
                 self.diagnostics.append(
                     {

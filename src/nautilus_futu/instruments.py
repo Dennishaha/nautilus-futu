@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -86,13 +87,18 @@ def validate_order(instrument: Equity, qty: Any, order_price: Any = None) -> Non
 
 class FutuInstrumentProvider(InstrumentProvider):
     def __init__(
-        self, config: Any = None, *, currency_overrides: dict[str, str] | None = None
+        self,
+        config: Any = None,
+        *,
+        currency_overrides: dict[str, str] | None = None,
+        evidence: Callable[[str, dict, Any, int], None] | None = None,
     ) -> None:
         super().__init__(config)
         self.session: Any = None
         self.currency_overrides = {
             canonical_symbol(k): v.upper() for k, v in (currency_overrides or {}).items()
         }
+        self._evidence = evidence
         self._load_lock = asyncio.Lock()
 
     def set_session(self, session: Any) -> None:
@@ -118,11 +124,13 @@ class FutuInstrumentProvider(InstrumentProvider):
                 canonical = canonical_symbol(symbol)
                 if self.find(instrument_id(canonical)) is not None:
                     continue
-                payload, received, _ = await session.quote.call(
-                    "get_stock_basicinfo",
-                    market=canonical.rsplit(".", 1)[1],
-                    code_list=[provider_symbol(canonical)],
-                )
+                request = {
+                    "market": canonical.rsplit(".", 1)[1],
+                    "code_list": [provider_symbol(canonical)],
+                }
+                payload, received, _ = await session.quote.call("get_stock_basicinfo", **request)
+                if self._evidence is not None:
+                    self._evidence("get_stock_basicinfo", request, payload, received)
                 if session is not self.session:
                     raise ConnectionError("instrument response belongs to an obsolete connection")
                 matches = [
@@ -146,6 +154,10 @@ class FutuInstrumentProvider(InstrumentProvider):
                 if len(matches) == 1 and str(matches[0].get("stock_type", "")) in {"STOCK", "ETF"}:
                     self.add(self.from_static(matches[0], received))
                     continue
+                if not self._looks_like_futures_symbol(canonical):
+                    raise ConfigurationError(
+                        "OpenD did not return an unambiguous real equity instrument"
+                    )
                 future_payload, future_received, _ = await session.quote.call(
                     "get_future_info", code_list=[provider_symbol(canonical)]
                 )
@@ -155,8 +167,15 @@ class FutuInstrumentProvider(InstrumentProvider):
                     if canonical_symbol(row["code"]) == canonical
                 ]
                 if len(future_matches) != 1:
-                    raise ConfigurationError("OpenD did not return an unambiguous real instrument")
+                    raise ConfigurationError(
+                        "OpenD did not return an unambiguous futures instrument"
+                    )
                 self.add(self.from_future_static(future_matches[0], future_received))
+
+    @staticmethod
+    def _looks_like_futures_symbol(symbol: str) -> bool:
+        ticker = canonical_symbol(symbol).rsplit(".", 1)[0].upper()
+        return bool(re.fullmatch(r"(?:6[BEJ]|[A-Z]{1,3})[FGHJKMNQUVXZ]\d{1,2}", ticker))
 
     def from_static(self, row: dict, received_ns: int | None = None) -> Equity:
         symbol = canonical_symbol(row["code"])
